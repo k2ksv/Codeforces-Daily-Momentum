@@ -22,7 +22,11 @@
   widget.id = 'cf-momentum-widget';
   
   widget.innerHTML = `
-    <div class="widget-header" style="justify-content: flex-end;">
+    <div class="widget-header">
+      <div class="header-title" id="cf-momentum-title" style="display: none;">
+        <div class="title-rank" id="cf-title-rank">Unrated</div>
+        <div class="title-points" id="cf-title-points">MOMENTUM</div>
+      </div>
       <div class="controls">
         <select id="cf-graph-select" style="display: none;">
           <option value="momentum">30-Day Momentum</option>
@@ -37,18 +41,22 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="value" id="cf-stat-total">—</div>
+        <div class="delta" id="cf-delta-total"></div>
         <div class="label">Total Solved (Selected Period)</div>
       </div>
       <div class="stat-card">
         <div class="value" id="cf-stat-avg">—</div>
+        <div class="delta" id="cf-delta-avg"></div>
         <div class="label">Solved in Last 30 Days</div>
       </div>
       <div class="stat-card">
         <div class="value" id="cf-stat-best">—</div>
+        <div class="delta" id="cf-delta-best"></div>
         <div class="label">Peak 30-Day Momentum</div>
       </div>
       <div class="stat-card">
         <div class="value" id="cf-stat-max-single">—</div>
+        <div class="delta" id="cf-delta-max-single"></div>
         <div class="label">Max Solves (1 Day)</div>
       </div>
     </div>
@@ -444,12 +452,55 @@
     const bestMomentum = Math.max(0, ...filteredSums);
     const maxSingleDay = Math.max(0, ...filteredDailySolves);
 
+    let prevTotal = 0, prevBest = 0, prevMax = 0;
+    if (selectedYear !== "all") {
+        const prevYear = (parseInt(selectedYear) - 1).toString();
+        let prevFilteredSums = [];
+        let prevFilteredDailySolves = [];
+        for (let i = 0; i < fullHistoryData.dates.length; i++) {
+            if (fullHistoryData.dates[i].startsWith(prevYear)) {
+                prevFilteredSums.push(fullHistoryData.rollingSums[i]);
+                prevFilteredDailySolves.push(fullHistoryData.dailySolves[i]);
+            }
+        }
+        prevTotal = prevFilteredDailySolves.reduce((a, b) => a + b, 0);
+        prevBest = prevFilteredSums.length ? Math.max(...prevFilteredSums) : 0;
+        prevMax = prevFilteredDailySolves.length ? Math.max(...prevFilteredDailySolves) : 0;
+    }
+
+    function setDelta(elementId, current, prev, suffix) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        if (selectedYear === "all") {
+            el.textContent = "";
+            return;
+        }
+        if (current === 0 && prev === 0) {
+            el.textContent = "";
+            return;
+        }
+        const diff = current - prev;
+        let perc = prev === 0 ? 100 : Math.round((diff / prev) * 100);
+        if (diff > 0) {
+            el.innerHTML = `<span style="color: #4CAF50">▲ +${perc}%</span> <span style="color: #bbb">vs ${suffix}</span>`;
+        } else if (diff < 0) {
+            el.innerHTML = `<span style="color: #F44336">▼ ${perc}%</span> <span style="color: #bbb">vs ${suffix}</span>`;
+        } else {
+            el.innerHTML = `<span style="color: #888">▬ 0%</span> <span style="color: #bbb">vs ${suffix}</span>`;
+        }
+    }
+
     statTotal.textContent = totalPeriodSolves;
     statTotal.style.color = getStatColor(totalPeriodSolves, 'total');
+    setDelta("cf-delta-total", totalPeriodSolves, prevTotal, "last year");
+
     statBest.textContent = bestMomentum;
     statBest.style.color = getStatColor(bestMomentum, 'momentum');
+    setDelta("cf-delta-best", bestMomentum, prevBest, "last year");
+
     statMaxSingle.textContent = maxSingleDay;
     statMaxSingle.style.color = getStatColor(maxSingleDay, 'daily');
+    setDelta("cf-delta-max-single", maxSingleDay, prevMax, "last year");
 
     loadingState.style.display = "none";
     chartCanvas.style.display = "block";
@@ -484,9 +535,14 @@
         seen.add(problemKey);
         dailyCounts[day] = (dailyCounts[day] || 0) + 1;
         
-        if (sub.problem.rating) {
+        let r = sub.problem.rating;
+        if (!r) {
+          const contestName = contestsMap[sub.problem.contestId] || "";
+          r = estimateRating(contestName, sub.problem.index);
+        }
+
+        if (r) {
           if (!ratingCounts[day]) ratingCounts[day] = {};
-          const r = sub.problem.rating;
           ratingCounts[day][r] = (ratingCounts[day][r] || 0) + 1;
         }
       }
@@ -562,10 +618,78 @@
       yearSelect.value = sortedYears.length > 0 ? sortedYears[0] : "all";
     }
 
+    // ── Compute Current Momentum Points ──
+    const nowTimestamp = Date.now() / 1000;
+    const thirtyDaysAgoTimestamp = nowTimestamp - (30 * 24 * 60 * 60);
+
+    let currentPoints = 0;
+    for (const sub of accepted) {
+      if (sub.creationTimeSeconds >= thirtyDaysAgoTimestamp) {
+        let rating = sub.problem.rating;
+        if (!rating) {
+          const contestName = contestsMap[sub.problem.contestId] || "";
+          rating = estimateRating(contestName, sub.problem.index);
+        }
+        currentPoints += Math.pow(2, rating / 200);
+      }
+    }
+    currentPoints = Math.floor(currentPoints);
+
+    let titleStr = "Unrated";
+    let titleColor = cfColors.gray;
+
+    if (currentPoints >= 35000) { titleStr = "Legendary Grandmaster"; titleColor = cfColors.darkRed; }
+    else if (currentPoints >= 20000) { titleStr = "Grandmaster"; titleColor = cfColors.red; }
+    else if (currentPoints >= 12000) { titleStr = "Master"; titleColor = cfColors.orange; }
+    else if (currentPoints >= 6000) { titleStr = "Candidate Master"; titleColor = cfColors.purple; }
+    else if (currentPoints >= 2500) { titleStr = "Expert"; titleColor = cfColors.blue; }
+    else if (currentPoints >= 1000) { titleStr = "Specialist"; titleColor = cfColors.cyan; }
+    else if (currentPoints >= 300) { titleStr = "Pupil"; titleColor = cfColors.green; }
+    else if (currentPoints > 0) { titleStr = "Newbie"; titleColor = cfColors.gray; }
+
+    const titleRankSpan = document.getElementById("cf-title-rank");
+    const titlePointsSpan = document.getElementById("cf-title-points");
+    const titleDiv = document.getElementById("cf-momentum-title");
+
+    if (titleDiv && titleRankSpan && titlePointsSpan) {
+      titleDiv.style.display = "flex";
+      if (currentPoints > 0) {
+        titleRankSpan.textContent = titleStr;
+        titleRankSpan.style.color = titleColor;
+        titlePointsSpan.textContent = "MOMENTUM";
+      } else {
+        titleRankSpan.textContent = "Unrated";
+        titleRankSpan.style.color = cfColors.gray;
+        titlePointsSpan.textContent = "MOMENTUM";
+      }
+    }
+
     // ── Compute Current 30-Day Sum ──
     const current30DaySum = fullHistoryData.rollingSums[fullHistoryData.rollingSums.length - 1] || 0;
+    let prev30DaySum = 0;
+    if (fullHistoryData.rollingSums.length > 30) {
+       prev30DaySum = fullHistoryData.rollingSums[fullHistoryData.rollingSums.length - 1 - 30] || 0;
+    }
+
     statAvg.textContent = current30DaySum;
     statAvg.style.color = getStatColor(current30DaySum, 'momentum');
+
+    const deltaAvg = document.getElementById("cf-delta-avg");
+    if (deltaAvg) {
+       if (prev30DaySum > 0 || current30DaySum > 0) {
+           const diff = current30DaySum - prev30DaySum;
+           let perc = prev30DaySum === 0 ? 100 : Math.round((diff / prev30DaySum) * 100);
+           if (diff > 0) {
+               deltaAvg.innerHTML = `<span style="color: #4CAF50">▲ +${perc}%</span> <span style="color: #bbb">vs prev 30d</span>`;
+           } else if (diff < 0) {
+               deltaAvg.innerHTML = `<span style="color: #F44336">▼ ${perc}%</span> <span style="color: #bbb">vs prev 30d</span>`;
+           } else {
+               deltaAvg.innerHTML = `<span style="color: #888">▬ 0%</span> <span style="color: #bbb">vs prev 30d</span>`;
+           }
+       } else {
+           deltaAvg.textContent = "";
+       }
+    }
 
     // ── Render Chart ──
     updateChart();
@@ -614,6 +738,61 @@
   }
 
   let boundListeners = false;
+  let contestsMap = {};
+
+  async function loadContests() {
+    try {
+      const cacheKey = "cf_contests_map";
+      const cached = await chrome.storage.local.get(cacheKey);
+      if (cached && cached[cacheKey]) {
+        contestsMap = cached[cacheKey];
+        // Background fetch to silently update
+        fetch("https://codeforces.com/api/contest.list").then(r => r.json()).then(json => {
+            if (json.status === "OK") {
+                let map = {};
+                json.result.forEach(c => map[c.id] = c.name);
+                chrome.storage.local.set({ [cacheKey]: map });
+            }
+        }).catch(() => {});
+      } else {
+        const res = await fetch("https://codeforces.com/api/contest.list");
+        const json = await res.json();
+        if (json.status === "OK") {
+            json.result.forEach(c => contestsMap[c.id] = c.name);
+            await chrome.storage.local.set({ [cacheKey]: contestsMap });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load contests map", e);
+    }
+  }
+
+  function estimateRating(contestName, index) {
+    if (!contestName || !index) return 1500;
+    const idx = index.replace(/[^A-Z]/g, ''); // 'A1' -> 'A'
+    if (contestName.includes("Div. 4")) {
+      const map = { 'A': 800, 'B': 800, 'C': 900, 'D': 1100, 'E': 1300, 'F': 1500, 'G': 1700, 'H': 1900 };
+      return map[idx] || 1500;
+    }
+    if (contestName.includes("Div. 3")) {
+      const map = { 'A': 800, 'B': 900, 'C': 1100, 'D': 1300, 'E': 1500, 'F': 1700, 'G': 1900 };
+      return map[idx] || 1600;
+    }
+    if (contestName.includes("Div. 2")) {
+      const map = { 'A': 800, 'B': 1000, 'C': 1300, 'D': 1600, 'E': 1900, 'F': 2200 };
+      return map[idx] || 1800;
+    }
+    if (contestName.includes("Div. 1")) {
+      const map = { 'A': 1500, 'B': 1900, 'C': 2300, 'D': 2700, 'E': 3000 };
+      return map[idx] || 2500;
+    }
+    if (contestName.includes("Educational") || contestName.includes("Global")) {
+      const map = { 'A': 800, 'B': 1000, 'C': 1300, 'D': 1600, 'E': 1900, 'F': 2200, 'G': 2500 };
+      return map[idx] || 1800;
+    }
+    const map = { 'A': 800, 'B': 1000, 'C': 1300, 'D': 1600, 'E': 1900, 'F': 2200 };
+    return map[idx] || 1500;
+  }
 
   async function init() {
     if (!boundListeners) {
@@ -621,6 +800,8 @@
       graphSelect.addEventListener("change", updateChart);
       boundListeners = true;
     }
+
+    await loadContests();
 
     try {
       const cacheKey = `cfData_${cfHandle}`;
