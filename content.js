@@ -86,14 +86,14 @@
   }
 
   function getRatingColor(rating) {
-    if (!rating || rating < 1200) return 'rgba(204, 204, 204, 0.7)'; // Gray
-    if (rating < 1400) return 'rgba(119, 255, 119, 0.7)'; // Green
-    if (rating < 1600) return 'rgba(119, 221, 187, 0.7)'; // Cyan
-    if (rating < 1900) return 'rgba(170, 170, 255, 0.7)'; // Blue
-    if (rating < 2100) return 'rgba(255, 136, 255, 0.7)'; // Purple
-    if (rating < 2300) return 'rgba(255, 204, 136, 0.7)'; // Light Orange
-    if (rating < 2400) return 'rgba(255, 187, 85, 0.7)';  // Orange
-    if (rating < 3000) return 'rgba(255, 119, 119, 0.7)'; // Red
+    if (!rating || rating < 1200) return 'rgba(160, 160, 160, 0.7)'; // Gray
+    if (rating < 1400) return 'rgba(0, 160, 0, 0.7)'; // Green
+    if (rating < 1600) return 'rgba(3, 168, 158, 0.7)'; // Cyan
+    if (rating < 1900) return 'rgba(0, 0, 255, 0.7)'; // Blue
+    if (rating < 2100) return 'rgba(170, 0, 170, 0.7)'; // Purple
+    if (rating < 2300) return 'rgba(255, 176, 80, 0.7)'; // Light Orange
+    if (rating < 2400) return 'rgba(255, 140, 0, 0.7)';  // Orange
+    if (rating < 3000) return 'rgba(255, 0, 0, 0.7)'; // Red
     return 'rgba(170, 0, 0, 0.7)'; // Dark Red
   }
 
@@ -108,12 +108,147 @@
     return dates;
   }
 
+  const cfColors = {
+    gray: '#a0a0a0',
+    green: '#00a000',
+    cyan: '#03a89e',
+    blue: '#0000ff',
+    purple: '#aa00aa',
+    orange: '#ff8c00',
+    red: '#ff0000',
+    darkRed: '#aa0000'
+  };
+
+  function getStatColor(value, type) {
+    if (type === 'total') {
+      if (value < 150) return cfColors.gray;
+      if (value < 400) return cfColors.green;
+      if (value < 800) return cfColors.cyan;
+      if (value < 1400) return cfColors.blue;
+      if (value < 2000) return cfColors.purple;
+      if (value < 3000) return cfColors.orange;
+      if (value < 4000) return cfColors.red;
+      return cfColors.darkRed;
+    } else if (type === 'momentum') {
+      if (value < 25) return cfColors.gray;
+      if (value < 50) return cfColors.green;
+      if (value < 80) return cfColors.cyan;
+      if (value < 120) return cfColors.blue;
+      if (value < 170) return cfColors.purple;
+      if (value < 230) return cfColors.orange;
+      if (value < 300) return cfColors.red;
+      return cfColors.darkRed;
+    } else if (type === 'daily') {
+      if (value < 3) return cfColors.gray;
+      if (value < 6) return cfColors.green;
+      if (value < 9) return cfColors.cyan;
+      if (value < 14) return cfColors.blue;
+      if (value < 20) return cfColors.purple;
+      if (value < 25) return cfColors.orange;
+      if (value < 30) return cfColors.red;
+      return cfColors.darkRed;
+    }
+  }
+
+  function getDynamicGradient(ctx, chartArea, yScale, type, isFill) {
+    if (!yScale || yScale.min === undefined || yScale.max === undefined) return 'transparent';
+    const min = yScale.min;
+    const max = yScale.max;
+    const range = max - min;
+    
+    let thresholds = [];
+    if (type === 'momentum') {
+      thresholds = [
+        { val: 0, r: 160, g: 160, b: 160 },
+        { val: 25, r: 0, g: 160, b: 0 },
+        { val: 50, r: 3, g: 168, b: 158 },
+        { val: 80, r: 0, g: 0, b: 255 },
+        { val: 120, r: 170, g: 0, b: 170 },
+        { val: 170, r: 255, g: 140, b: 0 },
+        { val: 230, r: 255, g: 0, b: 0 },
+        { val: 300, r: 170, g: 0, b: 0 }
+      ];
+    } else {
+      thresholds = [
+        { val: 0, r: 160, g: 160, b: 160 },
+        { val: 3, r: 0, g: 160, b: 0 },
+        { val: 6, r: 3, g: 168, b: 158 },
+        { val: 9, r: 0, g: 0, b: 255 },
+        { val: 14, r: 170, g: 0, b: 170 },
+        { val: 20, r: 255, g: 140, b: 0 },
+        { val: 25, r: 255, g: 0, b: 0 },
+        { val: 30, r: 170, g: 0, b: 0 }
+      ];
+    }
+
+    function getColorStr(t, alpha) { return `rgba(${t.r}, ${t.g}, ${t.b}, ${alpha})`; }
+    function getInterpolatedColor(value) {
+      if (value <= thresholds[0].val) return thresholds[0];
+      if (value >= thresholds[thresholds.length - 1].val) return thresholds[thresholds.length - 1];
+      for (let i = 0; i < thresholds.length - 1; i++) {
+        if (value >= thresholds[i].val && value <= thresholds[i+1].val) {
+          let t1 = thresholds[i]; let t2 = thresholds[i+1];
+          let ratio = (value - t1.val) / (t2.val - t1.val);
+          return {
+            r: Math.round(t1.r + (t2.r - t1.r) * ratio),
+            g: Math.round(t1.g + (t2.g - t1.g) * ratio),
+            b: Math.round(t1.b + (t2.b - t1.b) * ratio)
+          };
+        }
+      }
+      return thresholds[0];
+    }
+
+    if (range <= 0) {
+       return getColorStr(getInterpolatedColor(min), isFill ? 0.4 : 1.0);
+    }
+
+    const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+    
+    let bottomColor = getInterpolatedColor(min);
+    gradient.addColorStop(0, getColorStr(bottomColor, isFill ? 0.0 : 1.0));
+
+    for (let t of thresholds) {
+      if (t.val > min && t.val < max) {
+        let offset = (t.val - min) / range;
+        gradient.addColorStop(offset, getColorStr(t, isFill ? 0.4 : 1.0));
+      }
+    }
+
+    let topColor = getInterpolatedColor(max);
+    gradient.addColorStop(1, getColorStr(topColor, isFill ? 0.6 : 1.0));
+
+    return gradient;
+  }
+
   function renderChartConfig(graphType, dates, rollingSums, dailySolves, movingAvg7d, ratingsData) {
     if (momentumChart) {
       momentumChart.destroy();
     }
 
+    const ctx = chartCanvas.getContext("2d");
     let config = {};
+
+    const commonTooltipStyles = {
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      titleFont: { size: 14, family: 'inherit', weight: 'bold' },
+      bodyFont: { size: 13, family: 'inherit' },
+      padding: 12,
+      cornerRadius: 8,
+      displayColors: false,
+    };
+
+    const commonZoomPlugin = {
+      zoom: {
+        wheel: { enabled: true, speed: 0.1 },
+        pinch: { enabled: true },
+        mode: 'x',
+      },
+      pan: {
+        enabled: true,
+        mode: 'x',
+      }
+    };
 
     if (graphType === "momentum") {
       config = {
@@ -123,13 +258,25 @@
           datasets: [{
             label: "30-Day Momentum",
             data: rollingSums,
-            borderColor: "#4bc0c0",
-            backgroundColor: "rgba(75, 192, 192, 0.2)",
+            borderColor: function(context) {
+              const {ctx, chartArea, scales} = context.chart;
+              if (!chartArea) return null;
+              return getDynamicGradient(ctx, chartArea, scales.y, 'momentum', false);
+            },
+            backgroundColor: function(context) {
+              const {ctx, chartArea, scales} = context.chart;
+              if (!chartArea) return null;
+              return getDynamicGradient(ctx, chartArea, scales.y, 'momentum', true);
+            },
             fill: true,
-            tension: 0.3,
+            tension: 0.4,
             pointRadius: dates.length > 365 ? 0 : 2,
             pointHoverRadius: 6,
-            pointBackgroundColor: "#4bc0c0",
+            pointBackgroundColor: function(context) {
+              const {ctx, chartArea, scales} = context.chart;
+              if (!chartArea) return null;
+              return getDynamicGradient(ctx, chartArea, scales.y, 'momentum', false);
+            },
             borderWidth: 2,
           }],
         },
@@ -137,7 +284,17 @@
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: "index", intersect: false },
-          plugins: { legend: { display: false } },
+          plugins: { 
+            legend: { display: false },
+            zoom: commonZoomPlugin,
+            tooltip: {
+              ...commonTooltipStyles,
+              callbacks: {
+                title: (items) => `Date: ${items[0].label}`,
+                label: (item) => `30-Day Momentum: ${item.raw} solves`,
+              },
+            }
+          },
           scales: {
             x: { title: { display: true, text: "Date", color: "#666" }, ticks: { maxTicksLimit: 12 } },
             y: { beginAtZero: true, title: { display: true, text: "Solves in prior 30 days", color: "#666" } },
@@ -154,9 +311,13 @@
               type: 'line',
               label: '7-Day Trend',
               data: movingAvg7d,
-              borderColor: '#ff9800',
+              borderColor: function(context) {
+                const {ctx, chartArea, scales} = context.chart;
+                if (!chartArea) return null;
+                return getDynamicGradient(ctx, chartArea, scales.y, 'daily', false);
+              },
               backgroundColor: 'transparent',
-              tension: 0.3,
+              tension: 0.4,
               pointRadius: 0,
               pointHoverRadius: 4,
               borderWidth: 2,
@@ -166,7 +327,12 @@
               type: 'bar',
               label: 'Daily Solves',
               data: dailySolves,
-              backgroundColor: 'rgba(75, 192, 192, 0.4)',
+              backgroundColor: function(context) {
+                const {ctx, chartArea, scales} = context.chart;
+                if (!chartArea) return null;
+                return getDynamicGradient(ctx, chartArea, scales.y, 'daily', true);
+              },
+              borderRadius: 4,
               order: 1
             }
           ]
@@ -176,7 +342,9 @@
           maintainAspectRatio: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { display: true, position: 'top' },
+            legend: { display: false },
+            zoom: commonZoomPlugin,
+            tooltip: commonTooltipStyles
           },
           scales: {
             x: { title: { display: true, text: "Date", color: "#666" }, ticks: { maxTicksLimit: 12 } },
@@ -207,13 +375,19 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { display: true, position: 'top' },
+            legend: { display: false },
+            zoom: commonZoomPlugin,
             tooltip: {
+              ...commonTooltipStyles,
+              displayColors: true,
               callbacks: {
+                title: function(context) {
+                  return context[0].raw.x;
+                },
                 label: function(context) {
                   const data = context.raw;
                   const count = data.r / 4;
-                  return `Date: ${data.x} | Rating: ${data.y} | Solved: ${count}`;
+                  return `Rating: ${data.y} | Solved: ${count}`;
                 }
               }
             }
@@ -271,8 +445,11 @@
     const maxSingleDay = Math.max(0, ...filteredDailySolves);
 
     statTotal.textContent = totalPeriodSolves;
+    statTotal.style.color = getStatColor(totalPeriodSolves, 'total');
     statBest.textContent = bestMomentum;
+    statBest.style.color = getStatColor(bestMomentum, 'momentum');
     statMaxSingle.textContent = maxSingleDay;
+    statMaxSingle.style.color = getStatColor(maxSingleDay, 'daily');
 
     loadingState.style.display = "none";
     chartCanvas.style.display = "block";
@@ -286,125 +463,195 @@
     renderChartConfig(graphType, filteredDates, filteredSums, filteredDailySolves, filteredMovingAvg, filteredRatings);
   }
 
-  async function init() {
+  function processSubmissions(accepted) {
+    if (accepted.length === 0) {
+      throw new Error("No accepted submissions found.");
+    }
+
+    // ── Build Daily Counts Map & Ratings Map ──
+    const dailyCounts = {};
+    const ratingCounts = {};
+    const seen = new Set();
+    let firstDateStr = null;
+
+    const acceptedAsc = [...accepted].reverse();
+    acceptedAsc.forEach((sub) => {
+      const day = timestampToDate(sub.creationTimeSeconds);
+      if (!firstDateStr) firstDateStr = day;
+
+      const problemKey = `${sub.problem.contestId}-${sub.problem.index}`;
+      if (!seen.has(problemKey)) {
+        seen.add(problemKey);
+        dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+        
+        if (sub.problem.rating) {
+          if (!ratingCounts[day]) ratingCounts[day] = {};
+          const r = sub.problem.rating;
+          ratingCounts[day][r] = (ratingCounts[day][r] || 0) + 1;
+        }
+      }
+    });
+
+    // ── Generate All Dates ──
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const allDates = getDatesBetween(firstDateStr, todayStr);
+    
+    // ── Calculate Series ──
+    const rollingSums = [];
+    const mappedDailySolves = [];
+    const movingAvg7d = [];
+    const ratingsData = [];
+    const years = new Set();
+
+    for (let i = 0; i < allDates.length; i++) {
+      const dStr = allDates[i];
+      years.add(dStr.slice(0, 4));
+      const solvesToday = dailyCounts[dStr] || 0;
+      mappedDailySolves.push(solvesToday);
+      
+      let sum30 = 0;
+      const startIdx30 = Math.max(0, i - 29);
+      for (let j = startIdx30; j <= i; j++) {
+        sum30 += (dailyCounts[allDates[j]] || 0);
+      }
+      rollingSums.push(sum30);
+
+      let sum7 = 0;
+      let count7 = 0;
+      const startIdx7 = Math.max(0, i - 6);
+      for (let j = startIdx7; j <= i; j++) {
+        sum7 += (dailyCounts[allDates[j]] || 0);
+        count7++;
+      }
+      movingAvg7d.push(+(sum7 / count7).toFixed(2));
+
+      if (ratingCounts[dStr]) {
+        for (const [ratingStr, count] of Object.entries(ratingCounts[dStr])) {
+          ratingsData.push({
+            date: dStr,
+            rating: parseInt(ratingStr, 10),
+            count: count,
+            color: getRatingColor(parseInt(ratingStr, 10))
+          });
+        }
+      }
+    }
+
+    fullHistoryData = { dates: allDates, rollingSums, dailySolves: mappedDailySolves, movingAvg7d, ratings: ratingsData };
+
+    // ── Populate Year Dropdown ──
+    const currentYear = yearSelect.value;
+    yearSelect.innerHTML = "";
+    
+    const optionAll = document.createElement("option");
+    optionAll.value = "all";
+    optionAll.textContent = "All Time";
+    yearSelect.appendChild(optionAll);
+
+    const sortedYears = Array.from(years).sort().reverse();
+    sortedYears.forEach(year => {
+      const option = document.createElement("option");
+      option.value = year;
+      option.textContent = year;
+      yearSelect.appendChild(option);
+    });
+
+    if (sortedYears.includes(currentYear) || currentYear === "all") {
+      yearSelect.value = currentYear;
+    } else {
+      yearSelect.value = sortedYears.length > 0 ? sortedYears[0] : "all";
+    }
+
+    // ── Compute Current 30-Day Sum ──
+    const current30DaySum = fullHistoryData.rollingSums[fullHistoryData.rollingSums.length - 1] || 0;
+    statAvg.textContent = current30DaySum;
+    statAvg.style.color = getStatColor(current30DaySum, 'momentum');
+
+    // ── Render Chart ──
+    updateChart();
+  }
+
+  async function fetchAndMergeDelta(cachedAccepted) {
     try {
-      const response = await fetch(API_URL);
-      if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
-      
+      const cacheKey = `cfData_${cfHandle}`;
+      const response = await fetch(`${API_URL}&from=1&count=200`);
+      if (!response.ok) return;
       const json = await response.json();
-      if (json.status !== "OK") throw new Error(json.comment || "API Error");
+      if (json.status !== "OK") return;
 
-      const submissions = json.result;
-      const accepted = submissions.filter((sub) => sub.verdict === "OK");
+      const recentAccepted = json.result.filter(sub => sub.verdict === "OK");
+      if (recentAccepted.length === 0) return;
 
-      if (accepted.length === 0) {
-        throw new Error("No accepted submissions found.");
+      const newestCachedId = cachedAccepted[0].id;
+      const newSubmissions = [];
+
+      let foundOverlap = false;
+      for (const sub of recentAccepted) {
+        if (sub.id === newestCachedId) {
+          foundOverlap = true;
+          break;
+        }
+        newSubmissions.push(sub);
       }
 
-      // ── Build Daily Counts Map & Ratings Map ──
-      const dailyCounts = {};
-      const ratingCounts = {}; // { "YYYY-MM-DD": { "800": 1, "1200": 2 } }
-      const seen = new Set();
-      let firstDateStr = null;
-
-      const acceptedAsc = [...accepted].reverse();
-      
-      acceptedAsc.forEach((sub) => {
-        const day = timestampToDate(sub.creationTimeSeconds);
-        if (!firstDateStr) firstDateStr = day;
-        
-        const problemKey = `${sub.problem.contestId}-${sub.problem.index}`;
-        const uniqueKey = `${day}-${problemKey}`;
-        
-        if (!seen.has(uniqueKey)) {
-          seen.add(uniqueKey);
-          dailyCounts[day] = (dailyCounts[day] || 0) + 1;
-          
-          if (sub.problem.rating) {
-            if (!ratingCounts[day]) ratingCounts[day] = {};
-            const r = sub.problem.rating;
-            ratingCounts[day][r] = (ratingCounts[day][r] || 0) + 1;
-          }
+      if (newSubmissions.length > 0) {
+        let mergedAccepted;
+        if (foundOverlap) {
+          mergedAccepted = [...newSubmissions, ...cachedAccepted];
+        } else {
+          // Fallback: >200 new submissions since last visit
+          const fullRes = await fetch(API_URL);
+          const fullJson = await fullRes.json();
+          mergedAccepted = fullJson.result.filter(s => s.verdict === "OK");
         }
-      });
 
-      // ── Generate All Dates ──
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const allDates = getDatesBetween(firstDateStr, todayStr);
-      
-      // ── Calculate Series ──
-      const rollingSums = [];
-      const mappedDailySolves = [];
-      const movingAvg7d = [];
-      const ratingsData = [];
-      const years = new Set();
-
-      for (let i = 0; i < allDates.length; i++) {
-        const dStr = allDates[i];
-        years.add(dStr.slice(0, 4));
-        const solvesToday = dailyCounts[dStr] || 0;
-        mappedDailySolves.push(solvesToday);
-        
-        // 30-Day Rolling Sum
-        let sum30 = 0;
-        const startIdx30 = Math.max(0, i - 29);
-        for (let j = startIdx30; j <= i; j++) {
-          sum30 += (dailyCounts[allDates[j]] || 0);
-        }
-        rollingSums.push(sum30);
-
-        // 7-Day Moving Avg
-        let sum7 = 0;
-        let count7 = 0;
-        const startIdx7 = Math.max(0, i - 6);
-        for (let j = startIdx7; j <= i; j++) {
-          sum7 += (dailyCounts[allDates[j]] || 0);
-          count7++;
-        }
-        movingAvg7d.push(+(sum7 / count7).toFixed(2));
-
-        // Ratings Data
-        if (ratingCounts[dStr]) {
-          for (const [ratingStr, count] of Object.entries(ratingCounts[dStr])) {
-            ratingsData.push({
-              date: dStr,
-              rating: parseInt(ratingStr, 10),
-              count: count,
-              color: getRatingColor(parseInt(ratingStr, 10))
-            });
-          }
-        }
+        await chrome.storage.local.set({ [cacheKey]: mergedAccepted });
+        processSubmissions(mergedAccepted);
       }
+    } catch (err) {
+      console.warn("CF Momentum: Background update failed", err);
+    }
+  }
 
-      fullHistoryData = { dates: allDates, rollingSums, dailySolves: mappedDailySolves, movingAvg7d, ratings: ratingsData };
+  let boundListeners = false;
 
-      // ── Populate Year Dropdown ──
-      const sortedYears = Array.from(years).sort().reverse();
-      sortedYears.forEach(year => {
-        const option = document.createElement("option");
-        option.value = year;
-        option.textContent = year;
-        yearSelect.appendChild(option);
-      });
-
-      const defaultYear = sortedYears.length > 0 ? sortedYears[0] : "all";
-      yearSelect.value = defaultYear;
-
-      // ── Compute Current 30-Day Sum ──
-      const current30DaySum = fullHistoryData.rollingSums[fullHistoryData.rollingSums.length - 1] || 0;
-      statAvg.textContent = current30DaySum;
-
-      // ── Render Chart ──
-      updateChart();
-
-      // ── Bind Dropdowns ──
+  async function init() {
+    if (!boundListeners) {
       yearSelect.addEventListener("change", updateChart);
       graphSelect.addEventListener("change", updateChart);
+      boundListeners = true;
+    }
 
+    try {
+      const cacheKey = `cfData_${cfHandle}`;
+      const cache = await chrome.storage.local.get(cacheKey);
+      const cachedAccepted = cache[cacheKey];
+
+      if (cachedAccepted && Array.isArray(cachedAccepted) && cachedAccepted.length > 0) {
+        // Cache Hit! Render instantly.
+        loadingState.style.display = "none";
+        processSubmissions(cachedAccepted);
+        // Background Revalidation
+        fetchAndMergeDelta(cachedAccepted);
+      } else {
+        // Cache Miss! Fetch from scratch.
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
+        
+        const json = await response.json();
+        if (json.status !== "OK") throw new Error(json.comment || "API Error");
+
+        const accepted = json.result.filter((sub) => sub.verdict === "OK");
+
+        await chrome.storage.local.set({ [cacheKey]: accepted });
+        
+        loadingState.style.display = "none";
+        processSubmissions(accepted);
+      }
     } catch (err) {
       console.error("CF Momentum Error:", err);
       loadingState.style.display = "none";
-      errorState.style.display = "block";
+      errorState.style.display = "flex";
       errorState.innerHTML = `<span class="error-text">⚠️ Failed to load data: ${err.message}</span>`;
     }
   }

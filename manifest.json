@@ -1,18 +1,29 @@
 {
   "manifest_version": 3,
   "name": "Codeforces Daily Momentum",
-  "version": "1.0.0",
-  "description": "Track Codeforces problem-solving momentum over the last 30 days directly on the profile.",
-  "permissions": [],
-  "host_permissions": [
-    "https://codeforces.com/*"
-  ],
+  "version": "1.0",
+  "description": "Automatically generates an interactive 30-day activity graph on your Codeforces profile page.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
   "content_scripts": [
     {
-      "matches": ["*://codeforces.com/profile/*"],
-      "css": ["content.css"],
-      "js": ["chart.umd.js", "content.js"],
-      "run_at": "document_end"
+      "matches": ["https://codeforces.com/profile/*"],
+      "js": ["chart.umd.js", "chartjs-plugin-zoom.min.js", "content.js"],
+      "css": ["content.css"]
     }
-  ]
+  ],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://codeforces.com/api/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cftracker@k2ksv.com"
+    }
+  }
 }
