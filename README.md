@@ -77,8 +77,9 @@ If the API drops the problem rating, we use historical averages based on the con
 ## 🚀 Installation
 
 - **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/hhefepkjfclhncgneofcnhhbhnldonon)** (Chrome, Edge, Brave)
+- **[Install from the Fire Fox ADD-ONS](https://addons.mozilla.org/en-US/firefox/addon/codeforces-daily-momentum/)** (Firefox)
 
-#### Manual Install (Development / Firefox)
+#### Manual Install (Development)
 1. Clone this repository.
 2. For Chrome: Go to `chrome://extensions/` > **Developer mode** > **Load unpacked** (select folder).
 3. For Firefox: Go to `about:debugging#/runtime/this-firefox` > **Load Temporary Add-on** (select `manifest.json`).
